@@ -513,6 +513,10 @@ while true do
 	end
 
 	-- round over
+	local reached = won and waveNum or math.max(0, waveNum - 1)
+	for _, pl in Players:GetPlayers() do
+		if reached > (pl:GetAttribute("BestWave") or 0) then pl:SetAttribute("BestWave", reached) end -- saved by DataManager
+	end
 	enemyFolder:ClearAllChildren()
 	alarmSound:Stop()
 	core:SetAttribute("Health", 0) -- closes the shop until the next round starts
