@@ -234,6 +234,7 @@ event.OnServerEvent:Connect(function(player, action)
 		end
 	elseif type(action) == "string" and DIFFICULTIES[action] and not selectedDiff then
 		selectedDiff = action
+		Workspace:SetAttribute("Difficulty", action) -- read by Badges
 		event:FireAllClients("Hide", action)
 	end
 end)

@@ -142,8 +142,12 @@ local function setup(player)
 	end
 	if kills then
 		local last = kills.Value
+		player:SetAttribute("TotalKills", s.data.kills) -- read by Badges
 		kills.Changed:Connect(function(v)
-			if v > last then s.data.kills += v - last end
+			if v > last then
+				s.data.kills += v - last
+				player:SetAttribute("TotalKills", s.data.kills)
+			end
 			last = v
 		end)
 	end
