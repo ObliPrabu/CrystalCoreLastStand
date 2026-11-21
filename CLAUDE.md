@@ -1,0 +1,55 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this repo is
+
+A snapshot of the scripts of the Roblox game **Crystal Core: Last Stand**. There is no build system, linter or test
+suite: the game lives in Roblox Studio / the Roblox cloud and is edited through the `Roblox_Studio` MCP server.
+Files under `src/` mirror the Studio hierarchy (`.server.luau` = Script, `.client.luau` = LocalScript, `.luau` =
+ModuleScript). Studio is the source of truth: after changing a script there, re-export it to the same path here and
+commit. See `README.md` for the list of non-script objects (RemoteEvents, parts, rig) the scripts expect. The owner-only admin panel exists in the game but is intentionally not in this repo.
+
+## Working on the Roblox game
+
+- Call `list_roblox_studios` first. The `studio_id` changes every time Studio is relaunched (it changed between sessions), so never reuse an old one. Universe `2834406581`, place `7265881317`.
+- Studio is either in **Edit** or **Play**. Edit-mode tools (`execute_luau` with `datamodel_type: "Edit"`, `multi_edit`) fail with "Edit datamodel is not available in Play mode"; call `start_stop_play(false)` first. The user sometimes has a playtest running.
+- **Script source gotcha:** assigning `script.Source` from `execute_luau` changes the property but a playtest can still run the old editor copy. Always push changes through `ScriptEditorService:UpdateSourceAsync(script, function() return newSource end)` (or `multi_edit`), then confirm in a playtest.
+- Test by playing, then driving it from code: `execute_luau` with `datamodel_type: "Client"` can fire remotes and read the player's GUI; `"Server"` can read workspace state. Studio's test window is narrow, so the phone ("compact") UI layout is active during tests.
+- Temporary test hooks read from `Workspace` attributes: `DebugStartWave` and `DebugTimeLimit`. Clear them (`SetAttribute(name, nil)`) before saving.
+- `save_place` saves a new place version only. It never publishes; the phone only sees the last **published** version, and publishing (File → Publish to Roblox) is the user's step. The experience is **Private**; do not change visibility, name or description without being asked.
+- Open Cloud (`open_cloud_invoke`) scopes granted so far: `universe:read`, `developer-product:read`, `developer-product:write`. `universe:write` was refused (so the experience name/description were changed by the user by hand); if a call fails on scope, ask the user to enable it in Studio's Assistant MCP Permissions, never work around it.
+- Product/asset endpoints are multipart: `open_cloud_invoke` only sends multipart when `files` is given, and files must be inside an approved upload directory. The user approved `~/Desktop/RobloxIcons` (holds the two product icon PNGs). A 415 on a POST means "needs multipart".
+
+## Architecture
+
+Server logic lives in `ServerScriptService`, plus per-player UI in `StarterPlayer.StarterPlayerScripts`. They talk through `RemoteEvent`s in `ReplicatedStorage` (`DifficultyEvent`, `ShopEvent`, `CarpetEvent`, `WeaponEvent`) and `BindableEvent`s in `ServerStorage` (`SkipRequest`, `AdminCommand`, `WeaponReset`):
+
+- `DifficultyEvent` (menu): client sends `"Ready"` or a difficulty name; server sends `"ShowMenu"` / `"Hide"`.
+- `ShopEvent`: client sends `"Turret"`, `"Upgrade"`, `"Repair"`, `"SkipSync"`, `"Skip", <id>`; server sends `"Toast"`, `"Costs"` (prices every second), `"SkipList"`.
+- `ServerStorage.SkipRequest` (Bindable): `ShopManager` fires `(kind, amount)`, `WaveManager` applies it.
+
+**`WaveManager`** owns the round: a `DIFFICULTIES` table (Easy/Hard/Impossible: core health, damage, enemy health and speed per wave, counts, reward, `timeLimit`, `goalWaves`) and an `ENEMY_TYPES` table (Zombie, Runner, Tank, Boss every 5th wave). Main loop: wait for a difficulty pick, start the survival timer (`Workspace` attribute `TimeLeft`, `-1` means hidden), spawn waves from the `SpawnPoint*` parts, and end on core death (loss), timer zero or `goalWaves` reached (win), then reset everything and show the menu again. Enemies chase a player within 35 studs, otherwise walk to `Workspace.Core`. Enemy and core sounds are Creator Store asset ids in the `SOUNDS` table.
+
+**`ShopManager`** builds turrets (up to 8 slots in a ring around the Core), handles weapon upgrades (player attribute `DmgLevel`, +25% each, read by both weapons) and core repair, and the skip items. Skip items are listed in `SKIP_ITEMS` (skip 1, 5, 10, 15 waves, skip the whole run): 49, 49, 98, 147 Robux and 249 for the run. Every difficulty now has `goalWaves = 30`. They are real Developer Products (ids in `SKIP_ITEMS`: 3734006865, 3734006903, 3734006909, 3734006917, 3734006925), created through Open Cloud on 2026-11-20. `OWNER_TESTS_FREE = true` makes skips free for the owner and Studio so testing never spends Robux; set it to `false` to test a real purchase. `ProcessReceipt` grants the skip and de-duplicates receipts in a DataStore, but real purchases have not been tested.
+
+**`MagicCarpet`** (server) + `CarpetClient` (client, adds the CARPET button and the C key): a flying `Seat` summoned over `CarpetEvent`. The client steers it by setting a server-created `LinearVelocity` (on `Heartbeat`, not `RenderStepped`) using the thumbstick/WASD move vector relative to the camera. It is gated by the **Magic Carpet game pass** (id 2093111016, now 300 Robux; `OWNER_TESTS_FREE = true` lets the owner/Studio ride free). `CarpetTestMove` (a Vector3 player attribute) is a test hook for driving it from `execute_luau`. In the server script, connect the seat's `Occupant` listener *before* `seat:Sit(...)`.
+
+**All-Access subscription (not created yet):** both `MagicCarpet` and `ShopManager` have a `SUBSCRIPTION_ID = ""` switch. When a subscription id is pasted in, subscribers get the carpet and every skip free, and the skip menu offers an "ALL-ACCESS (monthly) 300 Robux / month" row via `PromptSubscriptionPurchase`. Roblox subscriptions can only be created in Creator Hub (no Open Cloud endpoint found), and the name cannot be edited afterward. This code path is untested.
+
+**Weapons (data-driven; nothing lives in `StarterPack` any more).** `ReplicatedStorage.WeaponData` (ModuleScript) is the single list of 4 melee (Sword, Katana, Battle Axe, War Hammer) and 4 guns (Blaster, Rapid Blaster, Scatter Gun, Longshot): price in coins (0 = starter), base damage, and a `stats` table that `WeaponManager` copies onto each Tool as attributes. Add or retune a weapon by editing that table (and a `LOOKS` entry in `WeaponManager` for its parts). `WeaponManager` builds the Tools from parts, clones the shared scripts from `ServerStorage.WeaponScripts` (`MeleeServer`, `GunServer`, `GunClient`), gives every owned weapon on each spawn, and handles `WeaponEvent` (`"Sync"`, `"Buy", id`, `"Upgrade", id`). Ownership and per-weapon levels (+20% damage each, max 5) live in server memory only and reset every round through `ServerStorage.WeaponReset`. Damage = tool `Damage` x (1 + 0.2 x `Level`) x (1 + 0.25 x the player's global `DmgLevel`). `ArmoryUI` is the buy/upgrade screen (ARMORY button, left column). Guns also have a magazine level (+25% of the base magazine per level, max 5): `UpgradeMag` action, `WeaponData.magSizeAt/magCost`, and `MagSize` is read live by `GunServer`.
+
+**Coins and kills:** coins live in `player.PlayerData.Coins` (a plain folder, so they do not appear on the Roblox leaderboard); the leaderboard folder `player.leaderstats` holds only `Kills`. The top-left coin symbol and amount are in `ShopUI`. Kills are credited through a `LastAttacker` (UserId) attribute that guns, melee weapons and turrets set on the enemy's Humanoid before damaging it; `WaveManager`'s `Died` handler reads it. Anything that damages enemies must set it or the kill is not counted.
+
+Melee weapons tween `Tool.Grip` on the server (wind-up up-left, diagonal cut down-right, recover); the hit box is a box in front of the player's root (`HitX/HitY/HitZ` attributes), not the blade, so enemies in front always get hit. Character joints are `AnimationConstraint`s whose `C0` is read-only, so the arm itself cannot be rotated from a script; only real Animation assets can move it. Studio's `generate_animation` was tried (asset `rbxassetid://96507427973181`, ~6 s, drifts right-to-left then holds) and rejected; it is unused and still in the owner's account. Test melee by standing so the character actually faces the target (`CFrame.lookAt`); facing away deals 0.
+
+**`AmmoPickups`** scatters 22 ammo crates in three rings around the Core. Every gun Tool (attribute `IsGun`) keeps `Ammo`, `Reserve` and `Reloading` as attributes (auto-reload); a crate adds each gun's own `CrateAmmo` up to its `MaxReserve`, and `WaveManager` resets them each round.
+
+Client: `DifficultyMenu` (start menu), `ShopUI` (health/coins panel, survival timer, shop, skip menu, toasts; switches to a compact top-right layout on touch or narrow screens so it stays clear of the thumbstick).
+
+World objects (all in `Workspace`): `Core`, `ArenaFloor` (700x700, top surface at y=1), `SpawnPoint`..`SpawnPoint4` (300 studs out on each side), `PlayerSpawn`, `Decor` (walls, torch pillars). Enemy template is `ServerStorage.Enemy`.
+
+## Decisions to keep
+
+- Sounds should be friendly and goofy, not scary (the user asked for this).
+- Skipping waves ahead intentionally makes the next enemies tougher (strength follows the wave number); only "Skip Entire Run" is an instant win.
