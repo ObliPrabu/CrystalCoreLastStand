@@ -152,8 +152,15 @@ local function watch(enemy)
 	end)
 end
 
-enemies.ChildAdded:Connect(function(e) task.spawn(watch, e) end)
-for _, e in ipairs(enemies:GetChildren()) do task.spawn(watch, e) end
+local function watchFolder(folder)
+	folder.ChildAdded:Connect(function(e) task.spawn(watch, e) end)
+	for _, e in ipairs(folder:GetChildren()) do task.spawn(watch, e) end
+end
+watchFolder(enemies)
+task.spawn(function() -- the Practice Arena dummies get damage numbers too
+	local dummies = Workspace:WaitForChild("PracticeDummies", 30)
+	if dummies then watchFolder(dummies) end
+end)
 
 ------------------------------------------------------------
 -- You got hurt: red flash + small shake

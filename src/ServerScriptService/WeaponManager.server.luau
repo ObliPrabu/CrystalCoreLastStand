@@ -199,11 +199,12 @@ local function giveAll(player)
 	end
 	clear(backpack)
 	clear(player.Character)
+	local practice = player:GetAttribute("InPractice") == true -- the Practice Arena gives every weapon
 
 	-- starter weapons first (slots 1 and 2), then everything you bought
 	for pass = 1, 2 do
 		for _, w in ipairs(WeaponData.list) do
-			if st.owned[w.id] and ((pass == 1) == (w.price == 0)) then
+			if (st.owned[w.id] or practice) and ((pass == 1) == (w.price == 0)) then
 				local ok, err = pcall(function()
 					buildTool(w, st.level[w.id] or 0, st.mag[w.id] or 0).Parent = backpack
 				end)
@@ -352,6 +353,9 @@ resetBind.Event:Connect(function()
 end)
 
 local function onPlayer(player)
+	player:GetAttributeChangedSignal("InPractice"):Connect(function()
+		giveAll(player)
+	end)
 	player.CharacterAdded:Connect(function()
 		task.wait(0.2)
 		giveAll(player)
