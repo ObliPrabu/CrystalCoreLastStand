@@ -212,7 +212,7 @@ local OWNER_TESTS_FREE = true
 
 -- ALL-ACCESS monthly subscription (create it in Creator Hub > Monetization > Subscriptions).
 -- Paste its id here; while it is "" the subscription features stay switched off.
-local SUBSCRIPTION_ID = ""
+local SUBSCRIPTION_ID = "EXP-7148503343955051007"
 
 local function isSubscriber(player)
 	if SUBSCRIPTION_ID == "" then return false end
