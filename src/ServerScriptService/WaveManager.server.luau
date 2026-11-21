@@ -3,6 +3,7 @@ local ServerStorage = game:GetService("ServerStorage")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Debris = game:GetService("Debris")
+local TweenService = game:GetService("TweenService")
 
 local core = Workspace:WaitForChild("Core")
 local enemyTemplate = ServerStorage:WaitForChild("Enemy")
@@ -77,13 +78,17 @@ local ENEMY_TYPES = {
 	Zombie = { name = "Zombie", color = Color3.fromRGB(80, 140, 70), scale = 1, hp = 1, speed = 1, dmg = 1, reward = 1, pitch = 1, fast = false },
 	Runner = { name = "Runner", color = Color3.fromRGB(235, 140, 40), scale = 0.85, hp = 0.5, speed = 1.6, dmg = 1, reward = 1.3, pitch = 1.1, fast = true },
 	Tank = { name = "Tank", color = Color3.fromRGB(120, 50, 50), scale = 1.4, hp = 3, speed = 0.65, dmg = 2, reward = 3, pitch = 0.75, fast = false },
+	Exploder = { name = "Exploder", color = Color3.fromRGB(255, 90, 40), scale = 0.9, hp = 0.6, speed = 1.5, dmg = 1, reward = 2, pitch = 1.25, fast = true, exploder = true },
+	Spitter = { name = "Spitter", color = Color3.fromRGB(70, 200, 160), scale = 0.95, hp = 0.7, speed = 0.9, dmg = 1, reward = 2.5, pitch = 0.9, fast = false, ranged = true },
 	Boss = { name = "BOSS", color = Color3.fromRGB(130, 60, 190), scale = 2.3, hp = 12, speed = 0.7, dmg = 4, reward = 25, pitch = 0.6, fast = false },
 }
 
 local function pickType(w)
 	local r = math.random()
-	if w >= 3 and r < 0.15 then return ENEMY_TYPES.Tank end
-	if w >= 2 and r < 0.40 then return ENEMY_TYPES.Runner end
+	if w >= 3 and r < 0.10 then return ENEMY_TYPES.Tank end
+	if w >= 4 and r < 0.22 then return ENEMY_TYPES.Exploder end
+	if w >= 6 and r < 0.32 then return ENEMY_TYPES.Spitter end
+	if w >= 2 and r < 0.55 then return ENEMY_TYPES.Runner end
 	return ENEMY_TYPES.Zombie
 end
 
@@ -249,6 +254,51 @@ local function nearestPlayer(pos)
 	return bestPlayer, bestDist, bestHum, bestRoot
 end
 
+local RANGED_RANGE = 32      -- spitters stop this far from their target and shoot
+local RANGED_COOLDOWN = 3
+
+-- Spitter: a green blob flies to where you were standing, then does its damage if you are still there
+local function spit(fromRoot, targetPos, onHit)
+	local blob = Instance.new("Part")
+	blob.Shape = Enum.PartType.Ball
+	blob.Size = Vector3.new(1.6, 1.6, 1.6)
+	blob.Color = Color3.fromRGB(120, 255, 90)
+	blob.Material = Enum.Material.Neon
+	blob.Anchored, blob.CanCollide, blob.CanQuery, blob.CanTouch = true, false, false, false
+	blob.Position = fromRoot.Position + Vector3.new(0, 2, 0)
+	blob.Parent = Workspace
+	local tween = TweenService:Create(blob, TweenInfo.new(0.7, Enum.EasingStyle.Quad), { Position = targetPos + Vector3.new(0, 2, 0) })
+	tween.Completed:Connect(function()
+		blob:Destroy()
+		if not gameOver then onHit() end
+	end)
+	tween:Play()
+end
+
+-- Exploder: blows up next to you or the core, then is gone (no coins for a suicide)
+local function explode(root, humanoid, radius, playerDmg, coreDmg)
+	local pos = root.Position
+	local fx = Instance.new("Explosion")
+	fx.Position = pos
+	fx.BlastRadius = radius
+	fx.BlastPressure = 0
+	fx.DestroyJointRadiusPercent = 0
+	fx.Parent = Workspace
+	for _, pl in ipairs(Players:GetPlayers()) do
+		local ch = pl.Character
+		local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+		local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+		if hum and hrp and hum.Health > 0 and (hrp.Position - pos).Magnitude <= radius then
+			hum:TakeDamage(playerDmg)
+		end
+	end
+	if (pos - core.Position).Magnitude <= radius + 8 then
+		damageCore(coreDmg)
+	end
+	humanoid:SetAttribute("NoReward", true)
+	humanoid.Health = 0
+end
+
 local function spawnEnemy(kind)
 	local spawnPoint = pickSpawn()
 	if not spawnPoint then return end
@@ -315,8 +365,8 @@ local function spawnEnemy(kind)
 		for _, player in Players:GetPlayers() do
 			local stats = player:FindFirstChild("PlayerData")
 			local coins = stats and stats:FindFirstChild("Coins")
-			if coins then
-				coins.Value += reward
+			if coins and not humanoid:GetAttribute("NoReward") then
+				coins.Value += reward * ((player:GetAttribute("DoubleUntil") or 0) > Workspace:GetServerTimeNow() and 2 or 1)
 			end
 		end
 		task.wait(2)
@@ -327,6 +377,7 @@ local function spawnEnemy(kind)
 	task.spawn(function()
 		local lastCoreAttack = 0
 		local lastPlayerAttack = 0
+		local lastRanged = 0
 		local nextGrowl = os.clock() + 1 + math.random() * 2
 		while humanoid.Health > 0 and enemy.Parent and not gameOver do
 			local now = os.clock()
@@ -337,7 +388,22 @@ local function spawnEnemy(kind)
 
 			local pl, pd, phum, proot = nearestPlayer(root.Position)
 			if pl and pd <= AGGRO_RANGE then
-				if pd <= meleeRange then
+				if kind.ranged and pd <= RANGED_RANGE then
+					humanoid:MoveTo(root.Position)
+					if now - lastRanged >= RANGED_COOLDOWN then
+						lastRanged = now
+						local aim = proot.Position
+						spit(root, aim, function()
+							if phum.Health > 0 and (proot.Position - aim).Magnitude < 7 then
+								phum:TakeDamage(playerDamage) -- you can dodge it by moving
+							end
+						end)
+					end
+				elseif pd <= meleeRange then
+					if kind.exploder then
+						explode(root, humanoid, 12, playerDamage * 2, coreDamage * 3)
+						break
+					end
 					if now - lastPlayerAttack >= PLAYER_ATTACK_COOLDOWN then
 						lastPlayerAttack = now
 						phum:TakeDamage(playerDamage)
@@ -350,7 +416,17 @@ local function spawnEnemy(kind)
 				end
 			else
 				local distance = (root.Position - core.Position).Magnitude
-				if distance <= ATTACK_RANGE + kind.scale * 2 then
+				if kind.ranged and distance <= RANGED_RANGE then
+					humanoid:MoveTo(root.Position)
+					if now - lastRanged >= RANGED_COOLDOWN then
+						lastRanged = now
+						spit(root, core.Position, function() damageCore(coreDamage) end)
+					end
+				elseif distance <= ATTACK_RANGE + kind.scale * 2 then
+					if kind.exploder then
+						explode(root, humanoid, 12, playerDamage * 2, coreDamage * 3)
+						break
+					end
 					if now - lastCoreAttack >= ATTACK_COOLDOWN then
 						lastCoreAttack = now
 						damageCore(coreDamage)

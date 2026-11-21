@@ -130,6 +130,16 @@ local function setup(player)
 	local kills = board and board:WaitForChild("Kills", 5)
 	if wins then wins.Value = s.data.wins end
 	player:SetAttribute("BestWave", s.data.bestWave)
+	if board then
+		-- a third leaderboard column with your saved best wave
+		local bestVal = Instance.new("IntValue")
+		bestVal.Name = "Best Wave"
+		bestVal.Value = s.data.bestWave
+		bestVal.Parent = board
+		player:GetAttributeChangedSignal("BestWave"):Connect(function()
+			bestVal.Value = player:GetAttribute("BestWave") or bestVal.Value
+		end)
+	end
 	if kills then
 		local last = kills.Value
 		kills.Changed:Connect(function(v)
