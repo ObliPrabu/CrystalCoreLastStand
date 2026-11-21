@@ -91,6 +91,7 @@ fire.OnServerEvent:Connect(function(player, targetPos)
 	local dmg = attr("Damage", 20)
 		* (1 + 0.2 * attr("Level", 0))
 		* (1 + 0.25 * (player:GetAttribute("DmgLevel") or 0))
+		* (player:GetAttribute("DamageBoost") or 1) -- red power-up
 	local pellets = attr("Pellets", 1)
 	local spread = math.rad(attr("Spread", 0))
 	local range = attr("Range", 250)

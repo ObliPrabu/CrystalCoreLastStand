@@ -30,6 +30,7 @@ local function hitCheck(char, duration)
 	local dmg = attr("Damage", 25)
 		* (1 + 0.2 * attr("Level", 0))
 		* (1 + 0.25 * (owner and owner:GetAttribute("DmgLevel") or 0))
+		* (owner and owner:GetAttribute("DamageBoost") or 1) -- red power-up
 	local box = Vector3.new(attr("HitX", 5), attr("HitY", 5), attr("HitZ", 7))
 
 	local params = OverlapParams.new()

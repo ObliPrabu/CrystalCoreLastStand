@@ -3,6 +3,8 @@
 --   SHIELD  - a force field blocks damage for 8 seconds
 --   x2 COINS - kills give double coins for 20 seconds
 --   REPAIR  - the Core heals 15% of its health
+--   x2 DAMAGE (red) - your guns and melee weapons do double damage for 15 seconds; a second one while it
+--     is still active doubles again (x4 is the maximum)
 -- Bosses always drop one. Orbs disappear after 20 seconds and when a round ends.
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -26,6 +28,7 @@ local KINDS = {
 	{ id = "Shield", text = "SHIELD", color = Color3.fromRGB(255, 225, 90) },
 	{ id = "Double", text = "x2 COINS", color = Color3.fromRGB(255, 170, 40) },
 	{ id = "Repair", text = "REPAIR", color = Color3.fromRGB(90, 255, 130) },
+	{ id = "Damage", text = "x2 DAMAGE", color = Color3.fromRGB(255, 60, 60) },
 }
 
 local function toast(player, text)
@@ -57,6 +60,17 @@ local function apply(player, kind)
 	elseif kind.id == "Double" then
 		player:SetAttribute("DoubleUntil", Workspace:GetServerTimeNow() + 20) -- read by WaveManager
 		toast(player, "DOUBLE COINS for 20 seconds!")
+	elseif kind.id == "Damage" then
+		local boost = math.min(4, (player:GetAttribute("DamageBoost") or 1) * 2) -- read by GunServer / MeleeServer
+		player:SetAttribute("DamageBoost", boost)
+		local token = (player:GetAttribute("DamageToken") or 0) + 1
+		player:SetAttribute("DamageToken", token)
+		task.delay(15, function()
+			if player.Parent and player:GetAttribute("DamageToken") == token then
+				player:SetAttribute("DamageBoost", nil)
+			end
+		end)
+		toast(player, boost >= 4 and "DAMAGE x4! (15 seconds, the maximum)" or "DOUBLE DAMAGE! (15 seconds)")
 	elseif kind.id == "Repair" then
 		local maxHp = core:GetAttribute("MaxHealth") or 0
 		local hp = core:GetAttribute("Health") or 0
