@@ -5,10 +5,17 @@ local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
+local ServerStorage = game:GetService("ServerStorage")
 
 local store = DataStoreService:GetDataStore("CrystalCoreSave_v1")
 local shop = ReplicatedStorage:WaitForChild("ShopEvent")
 local core = Workspace:WaitForChild("Core")
+local AchievementData = require(ReplicatedStorage:WaitForChild("AchievementData"))
+
+-- Achievements fires this with (player, id); we save it and show the pop-up
+local unlockEvent = Instance.new("BindableEvent")
+unlockEvent.Name = "AchievementUnlock"
+unlockEvent.Parent = ServerStorage
 
 local daily = Instance.new("RemoteEvent")
 daily.Name = "DailyEvent"
@@ -23,7 +30,7 @@ local function today()
 	return math.floor(os.time() / 86400) + (Workspace:GetAttribute("DebugDayOffset") or 0)
 end
 
-local DEFAULT = { wins = 0, kills = 0, bestWave = 0, streak = 0, lastDay = 0, bonus = 0, tutorialDone = false }
+local DEFAULT = { wins = 0, kills = 0, bestWave = 0, streak = 0, lastDay = 0, bonus = 0, tutorialDone = false, achievements = {} }
 
 local sessions = {} -- [player] = { data = {...}, loaded = bool }
 
@@ -42,6 +49,7 @@ local function copyDefaults(saved)
 			if type(saved[k]) == type(default) then d[k] = saved[k] end
 		end
 	end
+	if type(d.achievements) ~= "table" or d.achievements == DEFAULT.achievements then d.achievements = {} end
 	return d
 end
 
@@ -101,6 +109,7 @@ local function sendState(player)
 		bestWave = s.data.bestWave,
 		wins = s.data.wins,
 		kills = s.data.kills,
+		achievements = s.data.achievements,
 		loaded = s.loaded,
 	})
 end
@@ -198,6 +207,15 @@ core:GetAttributeChangedSignal("Health"):Connect(function()
 		end
 	end
 	prevHealth = h
+end)
+
+unlockEvent.Event:Connect(function(player, id)
+	local s = sessions[player]
+	if not s or not s.ready or not AchievementData.byId[id] or s.data.achievements[id] then return end
+	s.data.achievements[id] = true
+	daily:FireClient(player, "Achievement", id)
+	sendState(player)
+	save(player)
 end)
 
 Players.PlayerAdded:Connect(function(player) task.spawn(setup, player) end)

@@ -8,6 +8,7 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local daily = ReplicatedStorage:WaitForChild("DailyEvent")
+local AchievementData = require(ReplicatedStorage:WaitForChild("AchievementData"))
 
 local compact = UserInputService.TouchEnabled
 local panelMax = compact and 400 or 460
@@ -249,6 +250,95 @@ end)
 dayDim.Activated:Connect(function() end) -- swallow clicks on the dim background
 
 ------------------------------------------------------------
+-- Achievements: list screen + the "unlocked" pop-up
+------------------------------------------------------------
+local achDim, achPanel = makePanel(compact and 300 or 360)
+local achTitle = label(achPanel, "ACHIEVEMENTS", compact and 22 or 26, GOLD, Enum.Font.GothamBlack)
+achTitle.Position = UDim2.fromOffset(16, 10)
+achTitle.Size = UDim2.new(1, -32, 0, 32)
+local achCount = label(achPanel, "", compact and 13 or 15, Color3.fromRGB(180, 190, 205), Enum.Font.Gotham)
+achCount.Position = UDim2.fromOffset(16, 42)
+achCount.Size = UDim2.new(1, -32, 0, 20)
+local achList = Instance.new("ScrollingFrame")
+achList.Position = UDim2.fromOffset(12, 68)
+achList.Size = UDim2.new(1, -24, 1, -128)
+achList.BackgroundTransparency = 1
+achList.BorderSizePixel = 0
+achList.ScrollBarThickness = 5
+achList.CanvasSize = UDim2.fromOffset(0, 0)
+achList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+achList.Parent = achPanel
+local achLayout = Instance.new("UIListLayout")
+achLayout.Padding = UDim.new(0, 6)
+achLayout.SortOrder = Enum.SortOrder.LayoutOrder
+achLayout.Parent = achList
+local achRows = {}
+for i, a in ipairs(AchievementData.list) do
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, -8, 0, 50)
+	row.BorderSizePixel = 0
+	row.LayoutOrder = i
+	row.Parent = achList
+	corner(row, 8)
+	local name = label(row, a.title, compact and 15 or 17, Color3.new(1, 1, 1))
+	name.TextXAlignment = Enum.TextXAlignment.Left
+	name.Position = UDim2.fromOffset(12, 4)
+	name.Size = UDim2.new(1, -84, 0, 22)
+	local desc = label(row, a.desc, compact and 12 or 14, Color3.fromRGB(200, 205, 220), Enum.Font.Gotham)
+	desc.TextXAlignment = Enum.TextXAlignment.Left
+	desc.Position = UDim2.fromOffset(12, 26)
+	desc.Size = UDim2.new(1, -84, 0, 20)
+	local mark = label(row, "", 18, Color3.fromRGB(120, 230, 140), Enum.Font.GothamBlack)
+	mark.AnchorPoint = Vector2.new(1, 0.5)
+	mark.Position = UDim2.new(1, -8, 0.5, 0)
+	mark.Size = UDim2.fromOffset(66, 30)
+	achRows[a.id] = { row = row, mark = mark }
+end
+local achClose = button(achPanel, "CLOSE", Color3.fromRGB(70, 75, 95), 140, 40)
+achClose.AnchorPoint = Vector2.new(0.5, 1)
+achClose.Position = UDim2.new(0.5, 0, 1, -10)
+achClose.Activated:Connect(function() achDim.Visible = false end)
+
+local function refreshAch()
+	local got, total = 0, #AchievementData.list
+	for id, r in pairs(achRows) do
+		local done = state and state.achievements and state.achievements[id]
+		if done then got += 1 end
+		r.row.BackgroundColor3 = done and Color3.fromRGB(35, 95, 55) or Color3.fromRGB(45, 48, 66)
+		r.mark.Text = done and "DONE" or ""
+	end
+	achCount.Text = ("%d of %d unlocked"):format(got, total)
+end
+
+local popup = Instance.new("TextLabel")
+popup.AnchorPoint = Vector2.new(0.5, 0)
+popup.Position = UDim2.new(0.5, 0, 0, -90)
+popup.Size = UDim2.fromOffset(compact and 300 or 380, 60)
+popup.BackgroundColor3 = Color3.fromRGB(140, 110, 20)
+popup.TextColor3 = Color3.new(1, 1, 1)
+popup.Font = Enum.Font.GothamBold
+popup.TextSize = compact and 15 or 18
+popup.TextWrapped = true
+popup.Text = ""
+popup.Parent = gui
+corner(popup, 12)
+local popupId = 0
+local function showAchievement(id)
+	local a = AchievementData.byId[id]
+	if not a then return end
+	popupId += 1
+	local mine = popupId
+	popup.Text = "Achievement unlocked!\n" .. a.title
+	popup.Position = UDim2.new(0.5, 0, 0, -90)
+	TweenService:Create(popup, TweenInfo.new(0.4, Enum.EasingStyle.Back), { Position = UDim2.new(0.5, 0, 0, 20) }):Play()
+	task.delay(3.5, function()
+		if popupId == mine then
+			TweenService:Create(popup, TweenInfo.new(0.4), { Position = UDim2.new(0.5, 0, 0, -90) }):Play()
+		end
+	end)
+end
+
+------------------------------------------------------------
 -- Corner buttons (only while the difficulty menu is open)
 ------------------------------------------------------------
 local helpBtn = button(gui, "How to play", Color3.fromRGB(60, 120, 200), 150, 38)
@@ -262,6 +352,16 @@ dailyBtn.Position = UDim2.new(0, 12, 1, -12)
 dailyBtn.Visible = false
 dailyBtn.ZIndex = 0
 
+local achBtn = button(gui, "Achievements", Color3.fromRGB(130, 80, 190), 150, 38)
+achBtn.AnchorPoint = Vector2.new(0, 1)
+achBtn.Position = UDim2.new(0, 12, 1, -104)
+achBtn.Visible = false
+achBtn.ZIndex = 0
+achBtn.Activated:Connect(function()
+	refreshAch()
+	achDim.Visible = true
+end)
+
 helpBtn.Activated:Connect(function() openTutorial(false) end)
 dailyBtn.Activated:Connect(openDaily)
 
@@ -270,6 +370,7 @@ task.spawn(function()
 	local function sync()
 		helpBtn.Visible = menu.Enabled
 		dailyBtn.Visible = menu.Enabled
+		achBtn.Visible = menu.Enabled
 	end
 	menu:GetPropertyChangedSignal("Enabled"):Connect(sync)
 	sync()
@@ -284,6 +385,7 @@ daily.OnClientEvent:Connect(function(kind, data)
 		state = data
 		updateDot()
 		if dayDim.Visible then refreshDaily() end
+		if achDim.Visible then refreshAch() end
 		if firstState then
 			firstState = false
 			if not data.tutorialDone and data.loaded then
@@ -297,6 +399,8 @@ daily.OnClientEvent:Connect(function(kind, data)
 		end
 	elseif kind == "Claimed" then
 		daySub.Text = ("+%d coins claimed! See you tomorrow."):format(data)
+	elseif kind == "Achievement" then
+		showAchievement(data)
 	end
 end)
 
