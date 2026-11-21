@@ -69,14 +69,14 @@ fire.OnServerEvent:Connect(function(player, targetPos)
 		startReload()
 		return
 	end
+	local origin = barrel.Position
+	if (targetPos - origin).Magnitude < 0.1 then return end -- nothing to shoot at: do not spend a bullet
+
 	lastShot[player] = now
 	tool:SetAttribute("Ammo", ammo - 1)
 	if ammo - 1 <= 0 then
 		startReload() -- auto-reload when the magazine runs dry
 	end
-
-	local origin = barrel.Position
-	if (targetPos - origin).Magnitude < 0.1 then return end
 
 	local ignore = { char }
 	for _, name in ipairs({ "Core", "AmmoCrates", "Turrets", "Decor" }) do

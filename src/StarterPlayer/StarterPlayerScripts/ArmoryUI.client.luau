@@ -53,20 +53,6 @@ title.Text = "ARMORY"
 title.ZIndex = 11
 title.Parent = panel
 
-local coinLabel = Instance.new("TextLabel")
-coinLabel.AnchorPoint = Vector2.new(1, 0)
-coinLabel.Position = UDim2.new(1, -50, 0, 6)
-coinLabel.Size = UDim2.fromOffset(110, 32)
-coinLabel.BackgroundTransparency = 1
-coinLabel.TextXAlignment = Enum.TextXAlignment.Right
-coinLabel.Font = Enum.Font.GothamBold
-coinLabel.TextSize = 18
-coinLabel.TextColor3 = Color3.fromRGB(255, 215, 80)
-coinLabel.Text = "Coins: 0"
-coinLabel.ZIndex = 11
-coinLabel.Visible = false
-coinLabel.Parent = panel
-
 local close = Instance.new("TextButton")
 close.AnchorPoint = Vector2.new(1, 0)
 close.Position = UDim2.new(1, -10, 0, 8)
@@ -107,7 +93,6 @@ local function coins()
 end
 
 local function recolor()
-	coinLabel.Text = "Coins: " .. coins()
 	for _, info in pairs(rowButtons) do
 		if info.cost then
 			info.button.BackgroundColor3 = coins() >= info.cost and info.color or Color3.fromRGB(70, 70, 85)

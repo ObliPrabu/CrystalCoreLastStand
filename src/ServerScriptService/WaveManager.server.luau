@@ -49,7 +49,7 @@ local DIFFICULTIES = {
 		speedBase = 8, speedMax = 14,
 		countBase = 2, countPerWave = 1,
 		reward = 15, betweenWaves = 12,
-		timeLimit = 480,
+		timeLimit = 2100,           -- safety limit (35 min): long enough to clear 30 waves
 		goalWaves = 30,           -- clear this many waves to win            -- survive this many seconds to win
 	},
 	Hard = {
@@ -58,7 +58,7 @@ local DIFFICULTIES = {
 		speedBase = 11, speedMax = 18,
 		countBase = 4, countPerWave = 2,
 		reward = 10, betweenWaves = 8,
-		timeLimit = 420,
+		timeLimit = 2400,
 		goalWaves = 30,
 	},
 	Impossible = {
@@ -67,7 +67,7 @@ local DIFFICULTIES = {
 		speedBase = 14, speedMax = 22,
 		countBase = 6, countPerWave = 3,
 		reward = 8, betweenWaves = 5,
-		timeLimit = 360,
+		timeLimit = 2400,
 		goalWaves = 30,
 	},
 }
@@ -462,7 +462,7 @@ while true do
 	core:SetAttribute("Health", diff.coreHealth)
 	waveNum = (Workspace:GetAttribute("DebugStartWave") or 1) - 1
 	updateLabel()
-	toast(selectedDiff .. " mode - survive " .. math.floor(diff.timeLimit / 60) .. " minutes!")
+	toast(selectedDiff .. " mode - reach wave " .. diff.goalWaves .. " within " .. math.floor(diff.timeLimit / 60) .. " minutes!")
 	startTimer(Workspace:GetAttribute("DebugTimeLimit") or diff.timeLimit, roundId)
 	waitUnlessOver(FIRST_WAVE_DELAY)
 
@@ -515,6 +515,7 @@ while true do
 	-- round over
 	enemyFolder:ClearAllChildren()
 	alarmSound:Stop()
+	core:SetAttribute("Health", 0) -- closes the shop until the next round starts
 	Workspace:SetAttribute("TimeLeft", -1)
 	if won then
 		label.Text = ("VICTORY! You survived %d waves"):format(waveNum)

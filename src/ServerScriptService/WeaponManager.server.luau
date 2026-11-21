@@ -119,6 +119,15 @@ LOOKS.Longshot = function(tool)
 	addMuzzle(tool, Vector3.new(0.25, 0.25, 0.4), Color3.fromRGB(255, 70, 70), Vector3.new(0, 0.1, -2.0))
 end
 
+-- plain looks used when a weapon in WeaponData has no LOOKS entry yet
+LOOKS._defaultMelee = function(tool)
+	makeHandle(tool, Vector3.new(0.5, 0.5, 3.5), Color3.fromRGB(170, 170, 185), Enum.Material.Metal)
+end
+LOOKS._defaultGun = function(tool)
+	makeHandle(tool, Vector3.new(0.6, 0.9, 2), Color3.fromRGB(70, 70, 80), Enum.Material.Metal)
+	addMuzzle(tool, Vector3.new(0.3, 0.3, 0.4), Color3.fromRGB(255, 255, 255), Vector3.new(0, 0.1, -1.1))
+end
+
 local function buildTool(w, level, magLevel)
 	local tool = Instance.new("Tool")
 	tool.Name = w.name
@@ -138,7 +147,12 @@ local function buildTool(w, level, magLevel)
 		tool:SetAttribute("MagSize", WeaponData.magSizeAt(w, magLevel))
 	end
 
-	LOOKS[w.id](tool)
+	local look = LOOKS[w.id]
+	if not look then
+		warn("No look defined for weapon " .. tostring(w.id) .. ", using a plain one")
+		look = (w.kind == "gun") and LOOKS._defaultGun or LOOKS._defaultMelee
+	end
+	look(tool)
 
 	if w.kind == "melee" then
 		tool.Grip = CFrame.new(0, 0, -1.5) * CFrame.Angles(math.rad(90), 0, 0)
@@ -190,7 +204,12 @@ local function giveAll(player)
 	for pass = 1, 2 do
 		for _, w in ipairs(WeaponData.list) do
 			if st.owned[w.id] and ((pass == 1) == (w.price == 0)) then
-				buildTool(w, st.level[w.id] or 0, st.mag[w.id] or 0).Parent = backpack
+				local ok, err = pcall(function()
+					buildTool(w, st.level[w.id] or 0, st.mag[w.id] or 0).Parent = backpack
+				end)
+				if not ok then
+					warn("Could not give weapon " .. tostring(w.id) .. ": " .. tostring(err))
+				end
 			end
 		end
 	end
@@ -231,6 +250,14 @@ event.OnServerEvent:Connect(function(player, action, id)
 		return
 	end
 	if action ~= "Buy" and action ~= "Upgrade" and action ~= "UpgradeMag" then return end
+
+	-- the Armory is closed between rounds (coins are wiped at the next round start)
+	local roundCore = workspace:FindFirstChild("Core")
+	if roundCore and (roundCore:GetAttribute("Health") or 0) <= 0 then
+		toast(player, "No round is running right now")
+		sendList(player)
+		return
+	end
 
 	local w = WeaponData.byId[id]
 	local coins = coinsOf(player)
@@ -275,10 +302,19 @@ event.OnServerEvent:Connect(function(player, action, id)
 			st.owned[id] = true
 			st.level[id] = 0
 			local backpack = player:FindFirstChildOfClass("Backpack")
+			local built = true
 			if backpack then
-				buildTool(w, 0).Parent = backpack
+				built = pcall(function()
+					buildTool(w, 0).Parent = backpack
+				end)
 			end
-			toast(player, "Bought the " .. w.name .. "! Check your hotbar")
+			if built then
+				toast(player, "Bought the " .. w.name .. "! Check your hotbar")
+			else
+				coins.Value += w.price -- refund
+				st.owned[id] = nil
+				toast(player, "Could not give the " .. w.name .. " - you were not charged")
+			end
 		end
 	else -- Upgrade
 		if not st.owned[id] then

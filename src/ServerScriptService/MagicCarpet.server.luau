@@ -7,7 +7,7 @@ local Workspace = game:GetService("Workspace")
 local event = ReplicatedStorage:WaitForChild("CarpetEvent")
 local shop = ReplicatedStorage:WaitForChild("ShopEvent")
 
--- The "Magic Carpet" game pass (200 Robux), created in Creator Hub / Open Cloud.
+-- The "Magic Carpet" game pass (300 Robux), created in Creator Hub / Open Cloud.
 local GAME_PASS_ID = 2093111016
 
 -- While true, the game owner (and Studio) can ride for free instead of paying Robux.
@@ -25,6 +25,10 @@ local function isSubscriber(player)
 	end)
 	return ok and status ~= nil and status.IsSubscribed == true
 end
+
+-- The client steers the carpet at 60 studs/second. A cheater can ask for any speed, so the server
+-- also measures it and removes the carpet if it is clearly too fast.
+local MAX_CARPET_SPEED = 110
 
 local carpets = {}   -- [player] = the carpet seat they are using
 local ownsCache = {} -- [player] = true once we know they own the pass
@@ -119,6 +123,22 @@ local function summon(player)
 	seat.Parent = Workspace
 	pcall(function() seat:SetNetworkOwner(player) end)
 	carpets[player] = seat
+
+	-- server-side speed check
+	task.spawn(function()
+		local lastPos, lastTime = seat.Position, os.clock()
+		while carpets[player] == seat and seat.Parent do
+			task.wait(0.25)
+			local now, pos = os.clock(), seat.Position
+			local speed = (pos - lastPos).Magnitude / math.max(now - lastTime, 0.01)
+			lastPos, lastTime = pos, now
+			if speed > MAX_CARPET_SPEED then
+				removeCarpet(player)
+				toast(player, "Carpet removed - too fast")
+				break
+			end
+		end
+	end)
 
 	-- clean up when you hop off, die, or the seat never got used
 	local wasSeated = false

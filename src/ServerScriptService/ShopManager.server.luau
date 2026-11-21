@@ -113,8 +113,11 @@ task.spawn(function()
 					local tp = best.HumanoidRootPart.Position
 					head.CFrame = CFrame.lookAt(head.Position, Vector3.new(tp.X, head.Position.Y, tp.Z))
 					barrel.CFrame = head.CFrame * CFrame.new(0, 0, -2.4)
-					best.Humanoid:SetAttribute("LastAttacker", t:GetAttribute("OwnerId") or 0)
-					best.Humanoid:TakeDamage(TURRET_DAMAGE)
+					local ownerId = t:GetAttribute("OwnerId") or 0
+					local owner = Players:GetPlayerByUserId(ownerId)
+					local power = 1 + 0.25 * (owner and owner:GetAttribute("DmgLevel") or 0)
+					best.Humanoid:SetAttribute("LastAttacker", ownerId)
+					best.Humanoid:TakeDamage(TURRET_DAMAGE * power)
 
 					local origin = barrel.Position
 					local dist = (tp - origin).Magnitude
@@ -137,7 +140,7 @@ end)
 
 shop.OnServerEvent:Connect(function(player, action)
 	if (action == "Turret" or action == "Upgrade" or action == "Repair") and (core:GetAttribute("Health") or 0) <= 0 then
-		toast(player, "Pick a difficulty first!")
+		toast(player, "No round is running right now")
 		return
 	end
 	local coins = coinsOf(player)
@@ -239,8 +242,9 @@ end
 
 local function itemList(player)
 	local list = {}
+	local subscribed = isSubscriber(player)
 	for _, it in ipairs(SKIP_ITEMS) do
-		table.insert(list, { id = it.id, label = it.label, desc = it.desc, price = isSubscriber(player) and "Included (All-Access)" or priceText(it, player) })
+		table.insert(list, { id = it.id, label = it.label, desc = it.desc, price = subscribed and "Included (All-Access)" or priceText(it, player) })
 	end
 	return list
 end

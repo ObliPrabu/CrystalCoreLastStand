@@ -5,8 +5,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local shop = ReplicatedStorage:WaitForChild("ShopEvent")
 local core = Workspace:WaitForChild("Core")
 
-local AMMO_PER_CRATE = 24
-local MAX_RESERVE = 120
 local RESPAWN_SECONDS = 25
 local FLOOR_TOP = 1
 
