@@ -119,6 +119,9 @@ Players.PlayerAdded:Connect(function(player)
 	local kills = Instance.new("IntValue")
 	kills.Name = "Kills"
 	kills.Parent = board
+	local wins = Instance.new("IntValue")
+	wins.Name = "Wins"
+	wins.Parent = board
 end)
 
 -- Core sounds
@@ -516,9 +519,14 @@ while true do
 	if won then
 		label.Text = ("VICTORY! You survived %d waves"):format(waveNum)
 		toast("VICTORY! The Crystal Core is safe!")
+		for _, pl in Players:GetPlayers() do
+			local board = pl:FindFirstChild("leaderstats")
+			local w = board and board:FindFirstChild("Wins")
+			if w then w.Value += 1 end
+		end
 	else
-		label.Text = ("GAME OVER (%s) - you survived %d waves"):format(selectedDiff, waveNum - 1)
-		toast("GAME OVER - you survived " .. (waveNum - 1) .. " waves")
+		label.Text = ("GAME OVER (%s) - you survived %d waves"):format(selectedDiff, math.max(0, waveNum - 1))
+		toast("GAME OVER - you survived " .. math.max(0, waveNum - 1) .. " waves")
 	end
 	task.wait(8)
 end
