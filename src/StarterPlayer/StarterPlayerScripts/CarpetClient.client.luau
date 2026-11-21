@@ -25,7 +25,7 @@ gui.Parent = playerGui
 
 local btn = Instance.new("TextButton")
 btn.AnchorPoint = Vector2.new(0, 0)
-btn.Position = UDim2.new(0, 12, 0, compact and 126 or 404)
+btn.Position = UDim2.new(0, 12, 0, compact and 126 or 476)
 btn.Size = UDim2.fromOffset(120, 36)
 btn.BackgroundColor3 = Color3.fromRGB(150, 40, 160)
 btn.BorderSizePixel = 0

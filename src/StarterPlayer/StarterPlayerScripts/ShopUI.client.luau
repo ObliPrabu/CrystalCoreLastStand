@@ -155,7 +155,7 @@ updateTimer()
 ------------------------------------------------------------
 local panel = Instance.new("Frame")
 panel.Name = "ShopPanel"
-panel.Size = UDim2.fromOffset(230, 292)
+panel.Size = UDim2.fromOffset(230, 364)
 panel.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 panel.BackgroundTransparency = 0.15
 panel.BorderSizePixel = 0
@@ -178,6 +178,62 @@ title.TextColor3 = Color3.new(1, 1, 1)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 22
 title.Parent = panel
+
+------------------------------------------------------------
+-- ALL ACCESS banner (top of the shop). Picture, name and price come from the
+-- subscription itself; the logic is at the bottom of this script.
+------------------------------------------------------------
+local ROBUX = utf8.char(0xE002) -- the Robux symbol
+
+local banner = Instance.new("TextButton")
+banner.Name = "AllAccessBanner"
+banner.LayoutOrder = -1
+banner.Size = UDim2.fromOffset(210, 64)
+banner.BackgroundColor3 = Color3.fromRGB(110, 60, 190)
+banner.BorderSizePixel = 0
+banner.AutoButtonColor = true
+banner.Text = ""
+banner.Parent = panel
+Instance.new("UICorner", banner).CornerRadius = UDim.new(0, 10)
+local bannerGradient = Instance.new("UIGradient")
+bannerGradient.Color = ColorSequence.new(Color3.fromRGB(160, 80, 220), Color3.fromRGB(70, 40, 150))
+bannerGradient.Rotation = 20
+bannerGradient.Parent = banner
+local bannerStroke = Instance.new("UIStroke")
+bannerStroke.Color = Color3.fromRGB(255, 205, 60)
+bannerStroke.Thickness = 2
+bannerStroke.Parent = banner
+
+local bannerIcon = Instance.new("ImageLabel")
+bannerIcon.Position = UDim2.fromOffset(6, 6)
+bannerIcon.Size = UDim2.fromOffset(52, 52)
+bannerIcon.BackgroundColor3 = Color3.fromRGB(40, 20, 90)
+bannerIcon.BorderSizePixel = 0
+bannerIcon.ScaleType = Enum.ScaleType.Fit
+bannerIcon.Parent = banner
+Instance.new("UICorner", bannerIcon).CornerRadius = UDim.new(0, 8)
+
+local bannerTitle = Instance.new("TextLabel")
+bannerTitle.Position = UDim2.fromOffset(64, 7)
+bannerTitle.Size = UDim2.new(1, -70, 0, 26)
+bannerTitle.BackgroundTransparency = 1
+bannerTitle.TextXAlignment = Enum.TextXAlignment.Left
+bannerTitle.Font = Enum.Font.GothamBold
+bannerTitle.TextSize = 20
+bannerTitle.TextColor3 = Color3.fromRGB(255, 215, 80)
+bannerTitle.Text = "ALL ACCESS"
+bannerTitle.Parent = banner
+
+local bannerPrice = Instance.new("TextLabel")
+bannerPrice.Position = UDim2.fromOffset(64, 33)
+bannerPrice.Size = UDim2.new(1, -70, 0, 24)
+bannerPrice.BackgroundTransparency = 1
+bannerPrice.TextXAlignment = Enum.TextXAlignment.Left
+bannerPrice.Font = Enum.Font.GothamBold
+bannerPrice.TextSize = 14
+bannerPrice.TextColor3 = Color3.new(1, 1, 1)
+bannerPrice.Text = "only 300 " .. ROBUX .. " / month"
+bannerPrice.Parent = banner
 
 local function makeButton(order, color, action, firstText)
 	local b = Instance.new("TextButton")
@@ -382,3 +438,70 @@ shop.OnClientEvent:Connect(function(kind, ...)
 		repairBtn.Text = ("Repair Core\n%d coins"):format(rCost)
 	end
 end)
+
+
+------------------------------------------------------------
+-- ALL ACCESS banner logic
+------------------------------------------------------------
+local MarketplaceService = game:GetService("MarketplaceService")
+local SUBSCRIPTION_ID = "EXP-7148503343955051007"
+
+local subscribed = false
+local subPrice = "300"
+
+local function refreshBanner()
+	if subscribed then
+		bannerTitle.Text = "ALL ACCESS"
+		bannerPrice.Text = "Active - thank you!"
+	else
+		bannerTitle.Text = "ALL ACCESS"
+		bannerPrice.Text = "only " .. subPrice .. " " .. ROBUX .. " / month"
+	end
+end
+
+-- picture, name and price come straight from the subscription
+local function loadSubInfo()
+	local ok, info = pcall(function()
+		return MarketplaceService:GetSubscriptionProductInfoAsync(SUBSCRIPTION_ID)
+	end)
+	if ok and type(info) == "table" then
+		if info.IconImageAssetId and tostring(info.IconImageAssetId) ~= "0" then
+			bannerIcon.Image = "rbxassetid://" .. tostring(info.IconImageAssetId)
+		end
+		subPrice = tostring(info.DisplayPrice or info.PriceInRobux or subPrice)
+		refreshBanner()
+		return info
+	end
+	return nil
+end
+
+banner.Activated:Connect(function()
+	if subscribed then
+		showToast("You already have All Access!")
+		return
+	end
+	local info = loadSubInfo()
+	if info and info.IsForSale == false then
+		showToast("All Access isn't on sale yet")
+		return
+	end
+	MarketplaceService:PromptSubscriptionPurchase(player, SUBSCRIPTION_ID)
+end)
+
+shop.OnClientEvent:Connect(function(kind, value)
+	if kind == "SubStatus" then
+		subscribed = value == true
+		refreshBanner()
+	end
+end)
+
+MarketplaceService.PromptSubscriptionPurchaseFinished:Connect(function(_, _, didTryPurchasing)
+	if didTryPurchasing then
+		-- it can take a few seconds for a new subscription to register
+		task.delay(6, function() shop:FireServer("SubSync") end)
+		task.delay(15, function() shop:FireServer("SubSync") end)
+	end
+end)
+
+task.spawn(loadSubInfo)
+shop:FireServer("SubSync")

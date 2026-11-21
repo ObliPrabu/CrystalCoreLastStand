@@ -19,7 +19,7 @@ gui.DisplayOrder = 7
 gui.Parent = playerGui
 
 local toggle = Instance.new("TextButton")
-toggle.Position = UDim2.new(0, 12, 0, compact and 168 or 446)
+toggle.Position = UDim2.new(0, 12, 0, compact and 168 or 518)
 toggle.Size = UDim2.fromOffset(120, 36)
 toggle.BackgroundColor3 = Color3.fromRGB(200, 120, 30)
 toggle.BorderSizePixel = 0

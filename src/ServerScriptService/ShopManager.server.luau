@@ -136,7 +136,7 @@ task.spawn(function()
 end)
 
 shop.OnServerEvent:Connect(function(player, action)
-	if (core:GetAttribute("Health") or 0) <= 0 then
+	if (action == "Turret" or action == "Upgrade" or action == "Repair") and (core:GetAttribute("Health") or 0) <= 0 then
 		toast(player, "Pick a difficulty first!")
 		return
 	end
@@ -242,9 +242,6 @@ local function itemList(player)
 	for _, it in ipairs(SKIP_ITEMS) do
 		table.insert(list, { id = it.id, label = it.label, desc = it.desc, price = isSubscriber(player) and "Included (All-Access)" or priceText(it, player) })
 	end
-	if SUBSCRIPTION_ID ~= "" and not isSubscriber(player) then
-		table.insert(list, { id = "Subscribe", label = "ALL-ACCESS (monthly)", desc = "Carpet + every skip", price = "300 Robux / month" })
-	end
 	return list
 end
 
@@ -254,19 +251,16 @@ local function grantSkip(player, item)
 end
 
 shop.OnServerEvent:Connect(function(player, action, itemId)
+	if action == "SubSync" then
+		shop:FireClient(player, "SubStatus", isSubscriber(player))
+		return
+	end
 	if action == "SkipSync" then
 		shop:FireClient(player, "SkipList", itemList(player))
 		return
 	end
 	if action ~= "Skip" then return end
 	if (core:GetAttribute("Health") or 0) <= 0 then return end
-
-	if itemId == "Subscribe" then
-		if SUBSCRIPTION_ID ~= "" and not isSubscriber(player) then
-			MarketplaceService:PromptSubscriptionPurchase(player, SUBSCRIPTION_ID)
-		end
-		return
-	end
 
 	local item
 	for _, it in ipairs(SKIP_ITEMS) do
@@ -311,3 +305,11 @@ MarketplaceService.ProcessReceipt = function(receiptInfo)
 	end
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
+
+
+-- keep the banner in sync when someone subscribes or cancels
+Players.UserSubscriptionStatusChanged:Connect(function(player, subscriptionId)
+	if subscriptionId == SUBSCRIPTION_ID then
+		shop:FireClient(player, "SubStatus", isSubscriber(player))
+	end
+end)
