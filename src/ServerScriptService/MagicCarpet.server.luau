@@ -26,9 +26,12 @@ local function isSubscriber(player)
 	return ok and status ~= nil and status.IsSubscribed == true
 end
 
--- The client steers the carpet at 60 studs/second. A cheater can ask for any speed, so the server
--- also measures it and removes the carpet if it is clearly too fast.
-local MAX_CARPET_SPEED = 110
+-- The client steers the carpet at 60 studs/second, stops climbing at 180 studs and has no arena edge at all.
+-- A cheater can ask for anything, so the server also checks speed, height and leaving the arena.
+local MAX_CARPET_SPEED = 70    -- the real top speed is 60
+local SPEED_STRIKES = 4        -- samples (0.25 s each) in a row over the limit; a network burst is not cheating
+local MAX_CARPET_HEIGHT = 200  -- the client stops at 180; this leaves room for momentum
+local ARENA_MARGIN = 40        -- how far past the arena floor's edge the carpet may go
 
 local carpets = {}   -- [player] = the carpet seat they are using
 local ownsCache = {} -- [player] = true once we know they own the pass
@@ -124,17 +127,32 @@ local function summon(player)
 	pcall(function() seat:SetNetworkOwner(player) end)
 	carpets[player] = seat
 
-	-- server-side speed check
+	-- server-side checks: speed (must stay over the limit for a full second), height, and leaving the arena
 	task.spawn(function()
 		local lastPos, lastTime = seat.Position, os.clock()
+		local strikes = 0
+		local floor = Workspace:FindFirstChild("ArenaFloor")
+		local center = floor and floor.Position or Vector3.zero
+		local limit = (floor and floor.Size.X / 2 or 350) + ARENA_MARGIN
 		while carpets[player] == seat and seat.Parent do
 			task.wait(0.25)
 			local now, pos = os.clock(), seat.Position
 			local speed = (pos - lastPos).Magnitude / math.max(now - lastTime, 0.01)
 			lastPos, lastTime = pos, now
-			if speed > MAX_CARPET_SPEED then
+			strikes = speed > MAX_CARPET_SPEED and strikes + 1 or 0
+
+			local reason
+			if strikes >= SPEED_STRIKES then
+				reason = "too fast"
+			elseif pos.Y > MAX_CARPET_HEIGHT then
+				reason = "too high"
+			elseif not player:GetAttribute("InPractice")
+				and (math.abs(pos.X - center.X) > limit or math.abs(pos.Z - center.Z) > limit) then
+				reason = "outside the arena" -- (the Practice Arena is a different platform, so it is exempt)
+			end
+			if reason then
 				removeCarpet(player)
-				toast(player, "Carpet removed - too fast")
+				toast(player, "Carpet removed - " .. reason)
 				break
 			end
 		end
