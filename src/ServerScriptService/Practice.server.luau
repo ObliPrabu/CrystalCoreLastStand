@@ -1,4 +1,5 @@
 -- Practice Arena: a separate platform far away from the real arena, so it never interferes with a round.
+-- You walk in through a doorway next to the spawn; it is closed (red barrier) while a real round is running.
 -- You get EVERY weapon there (WeaponManager reads the player attribute InPractice) and can spawn training dummies.
 -- Nothing counts: no coins, kills, wins or achievements. Dummies live in Workspace.PracticeDummies, not in
 -- Workspace.Enemies, so WaveManager, PowerUps and Achievements never see them.
@@ -14,6 +15,8 @@ local DUMMY_HEALTH = 5000
 local HEAL_AFTER = 3                    -- seconds without damage before a dummy heals fully
 
 local template = ServerStorage:WaitForChild("Enemy")
+local shop = ReplicatedStorage:WaitForChild("ShopEvent")
+local core = Workspace:WaitForChild("Core")
 
 local event = Instance.new("RemoteEvent")
 event.Name = "PracticeEvent"
@@ -163,6 +166,10 @@ end
 
 local function enter(player)
 	if player:GetAttribute("InPractice") then return end
+	if (core:GetAttribute("Health") or 0) > 0 then -- a real round is running: the doorway is closed
+		shop:FireClient(player, "Toast", "The Practice Arena is closed while a round is running")
+		return
+	end
 	player:SetAttribute("InPractice", true)              -- WeaponManager gives every weapon
 	local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 	if hum then hum.Health = hum.MaxHealth end
@@ -186,9 +193,7 @@ local function leave(player)
 end
 
 event.OnServerEvent:Connect(function(player, action, arg)
-	if action == "Enter" then
-		enter(player)
-	elseif action == "Exit" then
+	if action == "Exit" then
 		leave(player)
 	elseif action == "Spawn" and player:GetAttribute("InPractice") and type(arg) == "string" then
 		spawnDummy(arg)
@@ -196,6 +201,106 @@ event.OnServerEvent:Connect(function(player, action, arg)
 		clearDummies()
 	end
 end)
+
+
+------------------------------------------------------------
+-- The doors you walk through
+-- The entrance stands in the real arena a few steps from where you spawn. While a round is running a red
+-- barrier fills the doorway (solid, so you cannot walk in) and the server also refuses to let anyone in.
+------------------------------------------------------------
+local ENTRANCE = Vector3.new(30, 1, 175)           -- real arena (floor top is y = 1)
+local EXIT_DOOR = ORIGIN + Vector3.new(0, 1, 70)   -- inside the practice platform
+
+local function makeDoor(center, title, subtitle, color, withBarrier)
+	local model = Instance.new("Folder")
+	model.Name = "Door_" .. title
+	model.Parent = folder
+
+	local function part(size, offset, props)
+		local p = Instance.new("Part")
+		p.Anchored = true
+		p.Size = size
+		p.Position = center + offset
+		p.Color = color
+		p.Material = Enum.Material.Neon
+		for k, v in pairs(props or {}) do p[k] = v end
+		p.Parent = model
+		return p
+	end
+	part(Vector3.new(3, 14, 3), Vector3.new(-7.5, 7, 0))
+	part(Vector3.new(3, 14, 3), Vector3.new(7.5, 7, 0))
+	local beam = part(Vector3.new(18, 3, 3), Vector3.new(0, 15.5, 0))
+	part(Vector3.new(12, 0.3, 6), Vector3.new(0, 0.15, 0), { CanCollide = false, Transparency = 0.4 }) -- glowing mat
+
+	local sign = Instance.new("BillboardGui")
+	sign.Size = UDim2.fromOffset(280, 64)
+	sign.StudsOffset = Vector3.new(0, 4, 0)
+	sign.MaxDistance = 260
+	sign.Parent = beam
+	local signText = Instance.new("TextLabel")
+	signText.Size = UDim2.fromScale(1, 1)
+	signText.BackgroundTransparency = 1
+	signText.TextScaled = true
+	signText.Font = Enum.Font.GothamBlack
+	signText.TextColor3 = color
+	signText.TextStrokeTransparency = 0.2
+	signText.Text = title .. "\n" .. subtitle
+	signText.Parent = sign
+
+	-- the thing that sends you through, one step behind the barrier
+	local trigger = part(Vector3.new(12, 12, 2), Vector3.new(0, 6, -2.5), { CanCollide = false, Transparency = 1 })
+
+	local barrier, closedSign
+	if withBarrier then
+		barrier = part(Vector3.new(12, 12, 1), Vector3.new(0, 6, 0), { Color = Color3.fromRGB(235, 50, 50), Transparency = 1, CanCollide = false })
+		closedSign = Instance.new("BillboardGui")
+		closedSign.Size = UDim2.fromOffset(260, 70)
+		closedSign.MaxDistance = 200
+		closedSign.Enabled = false
+		closedSign.Parent = barrier
+		local t = Instance.new("TextLabel")
+		t.Size = UDim2.fromScale(1, 1)
+		t.BackgroundTransparency = 1
+		t.TextScaled = true
+		t.Font = Enum.Font.GothamBlack
+		t.TextColor3 = Color3.new(1, 1, 1)
+		t.TextStrokeTransparency = 0
+		t.Text = "CLOSED\nround in progress"
+		t.Parent = closedSign
+	end
+	return trigger, barrier, closedSign
+end
+
+local entranceTrigger, barrier, closedSign = makeDoor(ENTRANCE, "PRACTICE ARENA", "walk in to train", Color3.fromRGB(60, 200, 220), true)
+local exitTrigger = makeDoor(EXIT_DOOR, "EXIT", "walk out to go back", Color3.fromRGB(255, 170, 50), false)
+
+local function roundRunning()
+	return (core:GetAttribute("Health") or 0) > 0
+end
+
+local function updateBarrier()
+	local closed = roundRunning()
+	barrier.CanCollide = closed
+	barrier.Transparency = closed and 0.35 or 1
+	closedSign.Enabled = closed
+end
+core:GetAttributeChangedSignal("Health"):Connect(updateBarrier)
+updateBarrier()
+
+local touchedAt = {}
+local function onTouch(fn)
+	return function(hit)
+		local model = hit:FindFirstAncestorOfClass("Model")
+		local player = model and Players:GetPlayerFromCharacter(model)
+		if not player then return end
+		if os.clock() - (touchedAt[player] or 0) < 2 then return end
+		touchedAt[player] = os.clock()
+		fn(player)
+	end
+end
+entranceTrigger.Touched:Connect(onTouch(enter))
+exitTrigger.Touched:Connect(onTouch(leave))
+Players.PlayerRemoving:Connect(function(p) touchedAt[p] = nil end)
 
 -- dying / respawning puts you back in the normal game
 local function onPlayer(player)

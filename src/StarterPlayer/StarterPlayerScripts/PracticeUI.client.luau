@@ -1,5 +1,5 @@
--- Practice Arena buttons: a "Practice Arena" button in the corner while the difficulty menu is open, and, once
--- you are inside, a bar to spawn training dummies, clear them or leave.
+-- Practice Arena bar: once you have walked in through the doorway, buttons to spawn training dummies, clear
+-- them or leave. (The way in is a physical doorway built by the Practice server script.)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -33,13 +33,6 @@ local function button(parent, text, color, w, h)
 	corner(b, 8)
 	return b
 end
-
--- corner button (shown with the difficulty menu)
-local enterBtn = button(gui, "Practice Arena", Color3.fromRGB(40, 140, 140), 150, 38)
-enterBtn.AnchorPoint = Vector2.new(0, 1)
-enterBtn.Position = UDim2.new(0, 12, 1, -150)
-enterBtn.Visible = false
-enterBtn.Activated:Connect(function() event:FireServer("Enter") end)
 
 -- the bar shown while practicing
 local bar = Instance.new("ScrollingFrame")
@@ -94,10 +87,8 @@ local function refresh()
 	bar.Visible = practicing
 	local menu = playerGui:FindFirstChild("DifficultyMenu")
 	if practicing then
-		enterBtn.Visible = false
 		if menu then menu.Enabled = false end
 	elseif menu then
-		enterBtn.Visible = menu.Enabled
 		-- back from practice with no round running: show the menu again
 		if not inRound() and not menu.Enabled and player:GetAttribute("WasPracticing") then
 			menu.Enabled = true
@@ -116,8 +107,6 @@ task.spawn(function()
 	menu:GetPropertyChangedSignal("Enabled"):Connect(function()
 		if player:GetAttribute("InPractice") and menu.Enabled then
 			menu.Enabled = false -- a round ended while you practice: do not cover the screen
-		else
-			enterBtn.Visible = menu.Enabled
 		end
 	end)
 	refresh()

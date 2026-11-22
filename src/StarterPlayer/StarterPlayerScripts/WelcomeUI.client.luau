@@ -339,22 +339,22 @@ local function showAchievement(id)
 end
 
 ------------------------------------------------------------
--- Corner buttons (only while the difficulty menu is open)
+-- Top-right buttons, under the SHOP button (only while the difficulty menu is open)
 ------------------------------------------------------------
 local helpBtn = button(gui, "How to play", Color3.fromRGB(60, 120, 200), 150, 38)
-helpBtn.AnchorPoint = Vector2.new(0, 1)
-helpBtn.Position = UDim2.new(0, 12, 1, -58)
+helpBtn.AnchorPoint = Vector2.new(1, 0)
+helpBtn.Position = UDim2.new(1, -12, 0, 192)
 helpBtn.Visible = false
 helpBtn.ZIndex = 0 -- stays behind the popups
 dailyBtn = button(gui, "Daily reward", Color3.fromRGB(200, 150, 40), 150, 38)
-dailyBtn.AnchorPoint = Vector2.new(0, 1)
-dailyBtn.Position = UDim2.new(0, 12, 1, -12)
+dailyBtn.AnchorPoint = Vector2.new(1, 0)
+dailyBtn.Position = UDim2.new(1, -12, 0, 238)
 dailyBtn.Visible = false
 dailyBtn.ZIndex = 0
 
 local achBtn = button(gui, "Achievements", Color3.fromRGB(130, 80, 190), 150, 38)
-achBtn.AnchorPoint = Vector2.new(0, 1)
-achBtn.Position = UDim2.new(0, 12, 1, -104)
+achBtn.AnchorPoint = Vector2.new(1, 0)
+achBtn.Position = UDim2.new(1, -12, 0, 146)
 achBtn.Visible = false
 achBtn.ZIndex = 0
 achBtn.Activated:Connect(function()
