@@ -30,7 +30,7 @@ local function today()
 	return math.floor(os.time() / 86400) + (Workspace:GetAttribute("DebugDayOffset") or 0)
 end
 
-local DEFAULT = { wins = 0, kills = 0, bestWave = 0, streak = 0, lastDay = 0, bonus = 0, tutorialDone = false, achievements = {} }
+local DEFAULT = { wins = 0, kills = 0, bestWave = 0, streak = 0, lastDay = 0, bonus = 0, tutorialDone = false, achievements = {}, endlessBest = 0, endlessMinutes = 0 }
 
 local sessions = {} -- [player] = { data = {...}, loaded = bool }
 
@@ -71,6 +71,11 @@ local function syncFromGame(player, s)
 	local wins = board and board:FindFirstChild("Wins")
 	if wins then s.data.wins = wins.Value end
 	s.data.bestWave = math.max(s.data.bestWave, player:GetAttribute("BestWave") or 0)
+	local eb = player:GetAttribute("EndlessBest") or 0
+	if eb > s.data.endlessBest then
+		s.data.endlessBest = eb
+		s.data.endlessMinutes = player:GetAttribute("EndlessMinutes") or s.data.endlessMinutes
+	end
 end
 
 local function save(player)
@@ -139,6 +144,8 @@ local function setup(player)
 	local kills = board and board:WaitForChild("Kills", 5)
 	if wins then wins.Value = s.data.wins end
 	player:SetAttribute("BestWave", s.data.bestWave)
+	player:SetAttribute("EndlessBest", s.data.endlessBest)
+	player:SetAttribute("EndlessMinutes", s.data.endlessMinutes)
 	if board then
 		-- a third leaderboard column with your saved best wave
 		local bestVal = Instance.new("IntValue")

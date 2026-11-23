@@ -156,10 +156,17 @@ local won = false
 local selectedDiff = nil
 local diff = nil
 local roundId = 0
+local endless = false      -- Endless mode: no wave goal, the chosen time is the run
+local endlessMinutes = 0
 local timeBonus = 0   -- extra seconds added by the admin panel
 local adminBind = ServerStorage:WaitForChild("AdminCommand")
 
 local function updateLabel()
+	if endless then
+		label.Text = ("Core HP: %d | Wave %d | Endless%s"):format(
+			core:GetAttribute("Health") or 0, waveNum, selectedDiff and (" | " .. selectedDiff) or "")
+		return
+	end
 	label.Text = ("Core HP: %d | Wave %d/%d%s"):format(
 		core:GetAttribute("Health") or 0,
 		waveNum,
@@ -227,15 +234,23 @@ skipBind.Event:Connect(function(kind, amount)
 end)
 
 -- Difficulty menu communication
-event.OnServerEvent:Connect(function(player, action)
+event.OnServerEvent:Connect(function(player, action, arg1, arg2)
 	if action == "Ready" then
 		if not selectedDiff then
 			event:FireClient(player, "ShowMenu")
 		end
 	elseif type(action) == "string" and DIFFICULTIES[action] and not selectedDiff then
 		selectedDiff = action
-		Workspace:SetAttribute("Difficulty", action) -- read by Badges
+		Workspace:SetAttribute("Difficulty", action) -- read by Achievements
 		event:FireAllClients("Hide", action)
+	elseif action == "Endless" and not selectedDiff and DIFFICULTIES[tostring(arg1)] and tonumber(arg2) then
+		-- Endless: a difficulty plus a time you choose, 1 to 60 minutes
+		endless = true
+		endlessMinutes = math.clamp(math.floor(tonumber(arg2)), 1, 60)
+		selectedDiff = tostring(arg1)
+		Workspace:SetAttribute("Difficulty", selectedDiff)
+		Workspace:SetAttribute("Endless", true) -- read by ShopManager (no skips)
+		event:FireAllClients("Hide", selectedDiff)
 	end
 end)
 
@@ -500,6 +515,8 @@ end
 while true do
 	roundId += 1
 	selectedDiff = nil
+	endless = false
+	Workspace:SetAttribute("Endless", nil)
 	diff = nil
 	gameOver = false
 	won = false
@@ -535,11 +552,20 @@ while true do
 	end
 
 	diff = DIFFICULTIES[selectedDiff]
+	if endless then
+		diff = table.clone(diff)
+		diff.goalWaves = math.huge
+		diff.timeLimit = endlessMinutes * 60
+	end
 	core:SetAttribute("MaxHealth", diff.coreHealth)
 	core:SetAttribute("Health", diff.coreHealth)
 	waveNum = (Workspace:GetAttribute("DebugStartWave") or 1) - 1
 	updateLabel()
-	toast(selectedDiff .. " mode - reach wave " .. diff.goalWaves .. " within " .. math.floor(diff.timeLimit / 60) .. " minutes!")
+	if endless then
+		toast("ENDLESS " .. selectedDiff .. " - survive " .. endlessMinutes .. " min. How many waves can you clear?")
+	else
+		toast(selectedDiff .. " mode - reach wave " .. diff.goalWaves .. " within " .. math.floor(diff.timeLimit / 60) .. " minutes!")
+	end
 	startTimer(Workspace:GetAttribute("DebugTimeLimit") or diff.timeLimit, roundId)
 	waitUnlessOver(FIRST_WAVE_DELAY)
 
@@ -590,15 +616,26 @@ while true do
 	end
 
 	-- round over
-	local reached = won and waveNum or math.max(0, waveNum - 1)
+	local reached = (won and not endless) and waveNum or math.max(0, waveNum - 1)
 	for _, pl in Players:GetPlayers() do
-		if reached > (pl:GetAttribute("BestWave") or 0) then pl:SetAttribute("BestWave", reached) end -- saved by DataManager
+		if endless then
+			-- Endless has its own saved record (and its own world leaderboard); it never touches BestWave or Wins
+			if reached > (pl:GetAttribute("EndlessBest") or 0) then
+				pl:SetAttribute("EndlessMinutes", endlessMinutes)
+				pl:SetAttribute("EndlessBest", reached)
+			end
+		elseif reached > (pl:GetAttribute("BestWave") or 0) then
+			pl:SetAttribute("BestWave", reached) -- saved by DataManager
+		end
 	end
 	enemyFolder:ClearAllChildren()
 	alarmSound:Stop()
 	core:SetAttribute("Health", 0) -- closes the shop until the next round starts
 	Workspace:SetAttribute("TimeLeft", -1)
-	if won then
+	if endless then
+		label.Text = ("ENDLESS over (%s, %d min) - you cleared %d waves"):format(selectedDiff, endlessMinutes, reached)
+		toast((won and "TIME'S UP! " or "GAME OVER - ") .. "you cleared " .. reached .. " waves in Endless")
+	elseif won then
 		label.Text = ("VICTORY! You survived %d waves"):format(waveNum)
 		toast("VICTORY! The Crystal Core is safe!")
 		for _, pl in Players:GetPlayers() do

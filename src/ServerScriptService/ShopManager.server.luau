@@ -264,6 +264,10 @@ shop.OnServerEvent:Connect(function(player, action, itemId)
 		return
 	end
 	if action ~= "Skip" then return end
+	if Workspace:GetAttribute("Endless") then
+		toast(player, "Skips are not available in Endless mode")
+		return
+	end
 	if (core:GetAttribute("Health") or 0) <= 0 then return end
 
 	local item
