@@ -4,6 +4,7 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local event = ReplicatedStorage:WaitForChild("WeaponEvent")
+local hatEvent = ReplicatedStorage:WaitForChild("HatEvent")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
@@ -33,7 +34,7 @@ Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 8)
 local panel = Instance.new("Frame")
 panel.AnchorPoint = Vector2.new(0.5, 0.5)
 panel.Position = UDim2.fromScale(0.5, 0.5)
-panel.Size = UDim2.fromOffset(compact and 360 or 440, compact and 310 or 470)
+panel.Size = UDim2.fromOffset(compact and 360 or 440, compact and 340 or 500)
 panel.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
 panel.BorderSizePixel = 0
 panel.Visible = false
@@ -82,8 +83,8 @@ coinLabel.ZIndex = 11
 coinLabel.Parent = panel
 
 local scroll = Instance.new("ScrollingFrame")
-scroll.Position = UDim2.fromOffset(10, 46)
-scroll.Size = UDim2.new(1, -20, 1, -56)
+scroll.Position = UDim2.fromOffset(10, 82)
+scroll.Size = UDim2.new(1, -20, 1, -92)
 scroll.BackgroundTransparency = 1
 scroll.BorderSizePixel = 0
 scroll.ScrollBarThickness = 6
@@ -97,6 +98,125 @@ layout.Padding = UDim.new(0, 6)
 layout.SortOrder = Enum.SortOrder.LayoutOrder
 layout.Parent = scroll
 
+-- tabs: WEAPONS | HATS
+local hatScroll = scroll:Clone()
+hatScroll.Name = "HatScroll"
+hatScroll.Visible = false
+hatScroll.Parent = panel
+
+local tabs = {}
+local function makeTab(text, x)
+	local t = Instance.new("TextButton")
+	t.Position = UDim2.fromOffset(x, 44)
+	t.Size = UDim2.fromOffset(120, 30)
+	t.BorderSizePixel = 0
+	t.TextColor3 = Color3.new(1, 1, 1)
+	t.Font = Enum.Font.GothamBold
+	t.TextSize = 14
+	t.Text = text
+	t.ZIndex = 11
+	t.Parent = panel
+	Instance.new("UICorner", t).CornerRadius = UDim.new(0, 8)
+	tabs[text] = t
+	return t
+end
+local weaponsTab = makeTab("WEAPONS", 10)
+local hatsTab = makeTab("HATS", 136)
+
+local function showTab(hats)
+	scroll.Visible = not hats
+	hatScroll.Visible = hats
+	weaponsTab.BackgroundColor3 = hats and Color3.fromRGB(55, 55, 72) or Color3.fromRGB(200, 120, 30)
+	hatsTab.BackgroundColor3 = hats and Color3.fromRGB(200, 120, 30) or Color3.fromRGB(55, 55, 72)
+	if hats then hatEvent:FireServer("Sync") end
+end
+weaponsTab.Activated:Connect(function() showTab(false) end)
+hatsTab.Activated:Connect(function() showTab(true) end)
+showTab(false)
+
+local hatButtons = {} -- { button, cost, color }
+
+local function renderHats(rows)
+	for _, c in ipairs(hatScroll:GetChildren()) do
+		if not c:IsA("UIListLayout") then c:Destroy() end
+	end
+	hatButtons = {}
+	for i, r in ipairs(rows) do
+		local row = Instance.new("Frame")
+		row.LayoutOrder = i
+		row.Size = UDim2.new(1, -8, 0, 62)
+		row.BackgroundColor3 = r.owned and Color3.fromRGB(38, 52, 44) or Color3.fromRGB(40, 40, 56)
+		row.BorderSizePixel = 0
+		row.ZIndex = 12
+		row.Parent = hatScroll
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+
+		local name = Instance.new("TextLabel")
+		name.Position = UDim2.fromOffset(8, 6)
+		name.Size = UDim2.new(1, -130, 0, 22)
+		name.BackgroundTransparency = 1
+		name.TextXAlignment = Enum.TextXAlignment.Left
+		name.Font = Enum.Font.GothamBold
+		name.TextSize = 16
+		name.TextColor3 = Color3.new(1, 1, 1)
+		name.Text = r.name .. (r.equipped and "   (wearing)" or "")
+		name.ZIndex = 13
+		name.Parent = row
+
+		local desc = Instance.new("TextLabel")
+		desc.Position = UDim2.fromOffset(8, 30)
+		desc.Size = UDim2.new(1, -130, 0, 24)
+		desc.BackgroundTransparency = 1
+		desc.TextXAlignment = Enum.TextXAlignment.Left
+		desc.TextYAlignment = Enum.TextYAlignment.Top
+		desc.TextWrapped = true
+		desc.Font = Enum.Font.Gotham
+		desc.TextSize = 12
+		desc.TextColor3 = Color3.fromRGB(170, 170, 190)
+		desc.Text = r.desc
+		desc.ZIndex = 13
+		desc.Parent = row
+
+		local b = Instance.new("TextButton")
+		b.AnchorPoint = Vector2.new(1, 0.5)
+		b.Position = UDim2.new(1, -8, 0.5, 0)
+		b.Size = UDim2.fromOffset(110, 44)
+		b.BorderSizePixel = 0
+		b.TextColor3 = Color3.new(1, 1, 1)
+		b.Font = Enum.Font.GothamBold
+		b.TextScaled = true
+		b.TextWrapped = true
+		b.ZIndex = 13
+		b.Parent = row
+		Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+		local lim = Instance.new("UITextSizeConstraint")
+		lim.MaxTextSize = 15
+		lim.MinTextSize = 8
+		lim.Parent = b
+
+		local color, cost
+		if not r.owned then
+			color, cost = Color3.fromRGB(60, 140, 210), r.price
+			b.Text = "BUY\n" .. r.price .. " coins"
+			b.Activated:Connect(function() hatEvent:FireServer("Buy", r.id) end)
+		elseif r.equipped then
+			color = Color3.fromRGB(150, 80, 70)
+			b.Text = "TAKE OFF"
+			b.Activated:Connect(function() hatEvent:FireServer("Unequip") end)
+		else
+			color = Color3.fromRGB(60, 120, 70)
+			b.Text = "WEAR"
+			b.Activated:Connect(function() hatEvent:FireServer("Equip", r.id) end)
+		end
+		b.BackgroundColor3 = color
+		table.insert(hatButtons, { button = b, cost = cost, color = color })
+	end
+end
+
+hatEvent.OnClientEvent:Connect(function(kind, rows)
+	if kind == "List" then renderHats(rows) end
+end)
+
 local lastRows = {}
 local rowButtons = {} -- [id] = { button = , cost = }
 
@@ -108,6 +228,11 @@ end
 
 local function recolor()
 	coinLabel.Text = "Coins: " .. coins()
+	for _, info in ipairs(hatButtons) do
+		if info.cost then
+			info.button.BackgroundColor3 = coins() >= info.cost and info.color or Color3.fromRGB(70, 70, 85)
+		end
+	end
 	for _, info in pairs(rowButtons) do
 		if info.cost then
 			info.button.BackgroundColor3 = coins() >= info.cost and info.color or Color3.fromRGB(70, 70, 85)
@@ -274,6 +399,7 @@ toggle.Activated:Connect(function()
 	panel.Visible = not panel.Visible
 	if panel.Visible then
 		event:FireServer("Sync")
+		if hatScroll.Visible then hatEvent:FireServer("Sync") end
 		recolor()
 	end
 end)

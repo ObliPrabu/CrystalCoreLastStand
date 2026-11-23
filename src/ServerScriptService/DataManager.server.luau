@@ -1,4 +1,4 @@
--- Saves progress between visits (Wins, lifetime kills, best wave, daily-reward streak, tutorial flag)
+-- Saves progress between visits (Wins, lifetime kills, best wave, daily-reward streak, tutorial flag, hats)
 -- and runs the daily reward. Coins and weapons are NOT saved: they are wiped every round by design.
 local Players = game:GetService("Players")
 local DataStoreService = game:GetService("DataStoreService")
@@ -30,7 +30,7 @@ local function today()
 	return math.floor(os.time() / 86400) + (Workspace:GetAttribute("DebugDayOffset") or 0)
 end
 
-local DEFAULT = { wins = 0, kills = 0, bestWave = 0, streak = 0, lastDay = 0, bonus = 0, tutorialDone = false, achievements = {}, endlessBest = 0, endlessMinutes = 0 }
+local DEFAULT = { wins = 0, kills = 0, bestWave = 0, streak = 0, lastDay = 0, bonus = 0, tutorialDone = false, achievements = {}, endlessBest = 0, endlessMinutes = 0, hats = "", hat = "" }
 
 local sessions = {} -- [player] = { data = {...}, loaded = bool }
 
@@ -75,6 +75,11 @@ local function syncFromGame(player, s)
 	if eb > s.data.endlessBest then
 		s.data.endlessBest = eb
 		s.data.endlessMinutes = player:GetAttribute("EndlessMinutes") or s.data.endlessMinutes
+	end
+	-- hats (bought and worn through the Hats script, which keeps them in these attributes)
+	if player:GetAttribute("DataLoaded") then
+		s.data.hats = player:GetAttribute("OwnedHats") or s.data.hats
+		s.data.hat = player:GetAttribute("EquippedHat") or s.data.hat
 	end
 end
 
@@ -146,6 +151,11 @@ local function setup(player)
 	player:SetAttribute("BestWave", s.data.bestWave)
 	player:SetAttribute("EndlessBest", s.data.endlessBest)
 	player:SetAttribute("EndlessMinutes", s.data.endlessMinutes)
+	player:SetAttribute("OwnedHats", s.data.hats)
+	player:SetAttribute("EquippedHat", s.data.hat)
+	player:GetAttributeChangedSignal("OwnedHats"):Connect(function() -- a new hat: save at once
+		if player:GetAttribute("DataLoaded") then save(player) end
+	end)
 	if board then
 		-- a third leaderboard column with your saved best wave
 		local bestVal = Instance.new("IntValue")
