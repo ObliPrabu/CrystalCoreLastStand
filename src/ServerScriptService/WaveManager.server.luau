@@ -617,8 +617,17 @@ while true do
 
 	-- round over
 	local reached = (won and not endless) and waveNum or math.max(0, waveNum - 1)
+	local teamKey -- the players at the end of an Endless run form one row on the world leaderboard
+	if endless then
+		local ids = {}
+		for _, pl in Players:GetPlayers() do table.insert(ids, pl.UserId) end
+		table.sort(ids)
+		while #ids > 4 do table.remove(ids) end
+		teamKey = table.concat(ids, ",") .. ":" .. reached .. ":" .. endlessMinutes
+	end
 	for _, pl in Players:GetPlayers() do
 		if endless then
+			pl:SetAttribute("EndlessRun", teamKey) -- read by Leaderboard
 			-- Endless has its own saved record (and its own world leaderboard); it never touches BestWave or Wins
 			if reached > (pl:GetAttribute("EndlessBest") or 0) then
 				pl:SetAttribute("EndlessMinutes", endlessMinutes)
