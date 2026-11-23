@@ -286,6 +286,18 @@ shop.OnServerEvent:Connect(function(player, action, itemId)
 end)
 
 -- real purchases (only used once productIds are filled in)
+-- Donate products (id -> Robux). The Donate button is in DonateUI; a donation only gives thanks and the
+-- saved Supporter flag (player attribute Supporter, kept by DataManager), no gameplay advantage.
+local DONATIONS = { [3735366362] = 25, [3735366426] = 100, [3735366440] = 500 }
+
+local function thankDonor(player, robux)
+	player:SetAttribute("Supporter", true)
+	toast(player, "THANK YOU for the " .. robux .. " Robux donation! You are now a Supporter")
+	for _, other in ipairs(Players:GetPlayers()) do
+		if other ~= player then toast(other, player.DisplayName .. " just donated " .. robux .. " Robux - thank you!") end
+	end
+end
+
 local receiptStore
 pcall(function() receiptStore = DataStoreService:GetDataStore("SkipReceipts") end)
 
@@ -297,7 +309,8 @@ MarketplaceService.ProcessReceipt = function(receiptInfo)
 	for _, it in ipairs(SKIP_ITEMS) do
 		if it.productId > 0 and it.productId == receiptInfo.ProductId then item = it end
 	end
-	if not item then return Enum.ProductPurchaseDecision.NotProcessedYet end
+	local donation = DONATIONS[receiptInfo.ProductId]
+	if not item and not donation then return Enum.ProductPurchaseDecision.NotProcessedYet end
 
 	local key = tostring(receiptInfo.PurchaseId)
 	local already = false
@@ -306,7 +319,7 @@ MarketplaceService.ProcessReceipt = function(receiptInfo)
 		if ok and seen then already = true end
 	end
 	if not already then
-		grantSkip(player, item)
+		if item then grantSkip(player, item) else thankDonor(player, donation) end
 		if receiptStore then
 			pcall(function() receiptStore:SetAsync(key, true) end)
 		end

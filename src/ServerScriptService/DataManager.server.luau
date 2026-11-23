@@ -30,7 +30,7 @@ local function today()
 	return math.floor(os.time() / 86400) + (Workspace:GetAttribute("DebugDayOffset") or 0)
 end
 
-local DEFAULT = { wins = 0, kills = 0, bestWave = 0, streak = 0, lastDay = 0, bonus = 0, tutorialDone = false, achievements = {}, endlessBest = 0, endlessMinutes = 0, hats = "", hat = "" }
+local DEFAULT = { wins = 0, kills = 0, bestWave = 0, streak = 0, lastDay = 0, bonus = 0, tutorialDone = false, achievements = {}, endlessBest = 0, endlessMinutes = 0, hats = "", hat = "", supporter = false }
 
 local sessions = {} -- [player] = { data = {...}, loaded = bool }
 
@@ -80,6 +80,7 @@ local function syncFromGame(player, s)
 	if player:GetAttribute("DataLoaded") then
 		s.data.hats = player:GetAttribute("OwnedHats") or s.data.hats
 		s.data.hat = player:GetAttribute("EquippedHat") or s.data.hat
+		if player:GetAttribute("Supporter") then s.data.supporter = true end
 	end
 end
 
@@ -153,6 +154,10 @@ local function setup(player)
 	player:SetAttribute("EndlessMinutes", s.data.endlessMinutes)
 	player:SetAttribute("OwnedHats", s.data.hats)
 	player:SetAttribute("EquippedHat", s.data.hat)
+	if s.data.supporter then player:SetAttribute("Supporter", true) end
+	player:GetAttributeChangedSignal("Supporter"):Connect(function() -- a donation: save at once
+		if player:GetAttribute("DataLoaded") then save(player) end
+	end)
 	player:GetAttributeChangedSignal("OwnedHats"):Connect(function() -- a new hat: save at once
 		if player:GetAttribute("DataLoaded") then save(player) end
 	end)
