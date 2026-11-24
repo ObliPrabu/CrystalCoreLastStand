@@ -67,3 +67,5 @@ World objects (all in `Workspace`): `Core`, `ArenaFloor` (700x700, top surface a
 
 - Sounds should be friendly and goofy, not scary (the user asked for this).
 - Skipping waves ahead intentionally makes the next enemies tougher (strength follows the wave number); only "Skip Entire Run" is an instant win.
+
+**Daily challenges.** `Challenges` (server) picks 3 of 4 goals per UTC day from a seeded `Random` (same for everyone): defeat N enemies (Kills leaderstat gains), reach wave N in a round, reach wave N in an Endless run (both read the `Workspace` attribute `Wave`, which `WaveManager` sets each wave and resets to 0), win a round (Wins gains). Progress is saved per player in DataStore `CrystalChallenges_v1` (key `c_<UserId>`, own load/save, memory only in Studio). Coins are paid at once when a round is running, otherwise banked and paid when the core health goes 0 -> full. `ChallengesUI` (client) has the "Daily Challenges" button under Donate (menu only) and the progress panel, over `ReplicatedStorage.ChallengeEvent`. Test hook: `Workspace` attribute `DebugDayOffset` (shared with DataManager). Tested in Studio with faked kills/waves only.

@@ -523,6 +523,7 @@ while true do
 	skipNow = false
 	skipExtraWaves = 0
 	waveNum = 0
+	Workspace:SetAttribute("Wave", 0)
 	alive = 0
 	Workspace:SetAttribute("TimeLeft", -1)
 	alarmSound:Stop()
@@ -571,6 +572,7 @@ while true do
 
 	while not gameOver do
 		waveNum += 1
+		Workspace:SetAttribute("Wave", waveNum) -- read by Challenges
 		updateLabel()
 		local isBossWave = waveNum % BOSS_EVERY == 0
 		toast(isBossWave and ("WAVE " .. waveNum .. " - BOSS INCOMING!") or ("Wave " .. waveNum))
