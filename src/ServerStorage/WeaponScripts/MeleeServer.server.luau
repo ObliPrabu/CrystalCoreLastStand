@@ -46,9 +46,11 @@ local function hitCheck(char, duration)
 		for _, p in ipairs(parts) do
 			local model = p:FindFirstAncestorOfClass("Model")
 			local hum = model and model:FindFirstChildOfClass("Humanoid")
-			if hum and hum.Health > 0 and not lastHit[model] and not Players:GetPlayerFromCharacter(model) then
+			-- players can only be hit in Versus (never yourself); hitting a player never counts as a kill
+			local victim = model and Players:GetPlayerFromCharacter(model)
+			if hum and hum.Health > 0 and not lastHit[model] and (not victim or (victim ~= owner and workspace:GetAttribute("Mode") == "Versus")) then
 				lastHit[model] = true
-				hum:SetAttribute("LastAttacker", owner and owner.UserId or 0)
+				if not victim then hum:SetAttribute("LastAttacker", owner and owner.UserId or 0) end
 				hum:TakeDamage(dmg)
 			end
 		end
