@@ -8,6 +8,9 @@ local TweenService = game:GetService("TweenService")
 local core = Workspace:WaitForChild("Core")
 local enemyTemplate = ServerStorage:WaitForChild("Enemy")
 local event = ReplicatedStorage:WaitForChild("DifficultyEvent")
+local modeEvent = Instance.new("RemoteEvent") -- Co-op / Versus vote (see ModeVoteUI)
+modeEvent.Name = "ModeEvent"
+modeEvent.Parent = ReplicatedStorage
 local shop = ReplicatedStorage:WaitForChild("ShopEvent")
 
 local ATTACK_RANGE = 12            -- distance from core center where enemies hit the core
@@ -232,6 +235,78 @@ skipBind.Event:Connect(function(kind, amount)
 		skipExtraWaves += math.max(0, (amount or 1) - 1)
 	end
 end)
+
+-- With 2+ players, everyone votes Co-op or Versus before the round starts (a tie or no votes = Co-op).
+-- Versus: the player with the most zombie kills wins (kills are credited to the last hit, as always).
+local VOTE_SECONDS = 12
+
+local function runVote()
+	local votes = {}
+	local function tally()
+		local coop, versus = 0, 0
+		for pl, choice in pairs(votes) do
+			if pl.Parent then
+				if choice == "Versus" then versus += 1 else coop += 1 end
+			end
+		end
+		return coop, versus
+	end
+	modeEvent:FireAllClients("VoteStart", VOTE_SECONDS)
+	local conn = modeEvent.OnServerEvent:Connect(function(pl, action, choice)
+		if action == "Vote" and (choice == "Coop" or choice == "Versus") then
+			votes[pl] = choice
+			modeEvent:FireAllClients("Tally", tally())
+		end
+	end)
+	local started = os.clock()
+	while os.clock() - started < VOTE_SECONDS do
+		task.wait(0.25)
+		local voted = 0
+		for pl in pairs(votes) do
+			if pl.Parent then voted += 1 end
+		end
+		if voted >= #Players:GetPlayers() then break end -- everyone has voted
+	end
+	conn:Disconnect()
+	local coop, versus = tally()
+	local result = versus > coop and "Versus" or "Coop"
+	modeEvent:FireAllClients("VoteEnd", result, coop, versus)
+	return result
+end
+
+local function announceVersus()
+	local rows = {}
+	for _, pl in Players:GetPlayers() do
+		local board = pl:FindFirstChild("leaderstats")
+		local kills = board and board:FindFirstChild("Kills")
+		table.insert(rows, { player = pl, name = pl.DisplayName, kills = kills and kills.Value or 0 })
+	end
+	if #rows == 0 then return end
+	table.sort(rows, function(a, b) return a.kills > b.kills end)
+	local top = rows[1].kills
+	local winners = {}
+	for _, r in ipairs(rows) do
+		if r.kills == top then
+			table.insert(winners, r.name)
+			local board = r.player:FindFirstChild("leaderstats")
+			local w = board and board:FindFirstChild("Wins")
+			if w and top > 0 then w.Value += 1 end -- only the winner(s) get a Win in Versus
+		end
+	end
+	local names = table.concat(winners, " & ")
+	if top == 0 then
+		toast("VERSUS over - nobody scored a kill")
+		return
+	end
+	label.Text = ("VERSUS winner: %s with %d kills"):format(names, top)
+	toast(("VERSUS WINNER: %s with %d kills!"):format(names, top))
+	local list = {}
+	for i = 1, math.min(#rows, 4) do
+		table.insert(list, ("%d. %s %d"):format(i, rows[i].name, rows[i].kills))
+	end
+	task.wait(2)
+	toast("Final kills: " .. table.concat(list, "  |  "))
+end
 
 -- Difficulty menu communication
 event.OnServerEvent:Connect(function(player, action, arg1, arg2)
@@ -517,6 +592,7 @@ while true do
 	selectedDiff = nil
 	endless = false
 	Workspace:SetAttribute("Endless", nil)
+	Workspace:SetAttribute("Mode", nil)
 	diff = nil
 	gameOver = false
 	won = false
@@ -551,6 +627,11 @@ while true do
 	while not selectedDiff do
 		task.wait(0.25)
 	end
+
+	local mode = "Coop"
+	if #Players:GetPlayers() >= (Workspace:GetAttribute("DebugVoteMin") or 2) then mode = runVote() end -- DebugVoteMin: test hook
+	Workspace:SetAttribute("Mode", mode)
+	if mode == "Versus" then toast("VERSUS - the most zombie kills wins! Hitting players does nothing.") end
 
 	diff = DIFFICULTIES[selectedDiff]
 	if endless then
@@ -629,9 +710,9 @@ while true do
 	end
 	for _, pl in Players:GetPlayers() do
 		if endless then
-			pl:SetAttribute("EndlessRun", teamKey) -- read by Leaderboard
+			if Workspace:GetAttribute("Mode") ~= "Versus" then pl:SetAttribute("EndlessRun", teamKey) end -- read by Leaderboard
 			-- Endless has its own saved record (and its own world leaderboard); it never touches BestWave or Wins
-			if reached > (pl:GetAttribute("EndlessBest") or 0) then
+			if Workspace:GetAttribute("Mode") ~= "Versus" and reached > (pl:GetAttribute("EndlessBest") or 0) then
 				pl:SetAttribute("EndlessMinutes", endlessMinutes)
 				pl:SetAttribute("EndlessBest", reached)
 			end
@@ -652,11 +733,15 @@ while true do
 		for _, pl in Players:GetPlayers() do
 			local board = pl:FindFirstChild("leaderstats")
 			local w = board and board:FindFirstChild("Wins")
-			if w then w.Value += 1 end
+			if w and Workspace:GetAttribute("Mode") ~= "Versus" then w.Value += 1 end
 		end
 	else
 		label.Text = ("GAME OVER (%s) - you survived %d waves"):format(selectedDiff, math.max(0, waveNum - 1))
 		toast("GAME OVER - you survived " .. math.max(0, waveNum - 1) .. " waves")
+	end
+	if Workspace:GetAttribute("Mode") == "Versus" then
+		task.wait(2)
+		announceVersus()
 	end
 	task.wait(8)
 end
