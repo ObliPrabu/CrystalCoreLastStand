@@ -109,9 +109,9 @@ fire.OnServerEvent:Connect(function(player, targetPos)
 		if result then
 			local model = result.Instance:FindFirstAncestorOfClass("Model")
 			local targetHum = model and model:FindFirstChildOfClass("Humanoid")
-			-- players can only be hit in Versus (never yourself); hitting a player never counts as a kill
+			-- players can only be hit in Versus, or admin on admin (never yourself); hitting a player never counts as a kill
 			local victim = model and Players:GetPlayerFromCharacter(model)
-			if targetHum and targetHum.Health > 0 and (not victim or (victim ~= player and workspace:GetAttribute("Mode") == "Versus")) then
+			if targetHum and targetHum.Health > 0 and (not victim or (victim ~= player and (workspace:GetAttribute("Mode") == "Versus" or (player:GetAttribute("IsAdmin") and victim:GetAttribute("IsAdmin"))))) then
 				if not victim then targetHum:SetAttribute("LastAttacker", player.UserId) end
 				targetHum:TakeDamage(dmg)
 			end
